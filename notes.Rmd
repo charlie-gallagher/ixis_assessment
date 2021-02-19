@@ -11,3 +11,9 @@ There are two parts to the assessment: a SQL test and a retailer deliverable. Th
 4. Set up git repo and R project (15 minutes)
 
 That's the first hour and a half or so. The rest can be devoted to looking through the data, cleaning as necessary, clarifying any acronyms, etc., and of course producing the tables. 
+
+Added all the documents I need to the `./doc` folder and set up a git repo. 
+
+
+# `openxlsx` 
+I haven't used this before, but it's a surprisingly flexible program. 
