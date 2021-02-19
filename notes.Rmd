@@ -1,0 +1,13 @@
+---
+title: "Notes"
+output: html_notebook
+---
+
+There are two parts to the assessment: a SQL test and a retailer deliverable. The deliverable is the larger of the two projects, but it shouldn't take too long. Some preparatory steps: 
+
+1. Review SQL notes, do some exercises beforehand (30-45 minutes)
+2. Read and thoroughly understand assignment (15 minutes)
+3. Read documentation for `openxlsx`, play around with it (30 minutes)
+4. Set up git repo and R project (15 minutes)
+
+That's the first hour and a half or so. The rest can be devoted to looking through the data, cleaning as necessary, clarifying any acronyms, etc., and of course producing the tables. 
