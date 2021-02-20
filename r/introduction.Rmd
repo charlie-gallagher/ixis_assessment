@@ -1,0 +1,264 @@
+---
+title: "A First Look"
+author: "Charlie Gallagher"
+output: html_notebook
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+library(lubridate)
+
+cart <- read_csv("../data/DataAnalyst_Ecom_data_addsToCart.csv")
+session <- read_csv("../data/DataAnalyst_Ecom_data_sessionCounts.csv")
+
+# Convert dim_date to date
+session <- mutate(session, date = mdy(dim_date))
+
+# Add date to cart
+cart <- mutate(cart, date = ymd(glue::glue("{dim_year}-{dim_month}-01")))
+```
+
+Two datasets. The first is `cart`, I'm guessing this is about the number of times something was added to cart, or the number of items added to cart. Not sure. All the documentation says is "Adds to cart broken out by month." Twelve observations.
+
+The second is `session`, for which the unit of observation seems to be browser, device category, and date. For each day, browser, and device, it shows the number of sessions and transactions and the quantity of items sold. 7,734 observations. Let's skim. 
+
+```{r}
+skimr::skim(session)
+```
+
+The data is all complete, which is nice. There are 57 browsers, 3 device categories, and 365 dates. Sessions are highly skewed right (median: 23, mean: 1347, sd: 3623), as are transactions and quantity. Dates range from July 1, 2012 to June 30, 2013. 
+
+**Box Plots**
+
+```{r}
+session %>% 
+  pivot_longer(cols = c(sessions, transactions, QTY)) %>% 
+  ggplot() + 
+  geom_boxplot(aes(x = name, y = value)) + 
+  facet_wrap(vars(name), scales = 'free')
+```
+
+Okay, so there are many, many outliers in each dataset. These are probably peak days. 
+
+```{r}
+session %>% 
+  group_by(date) %>% 
+  summarize(
+    sessions = sum(sessions),
+    qty = sum(QTY),
+    transactions = sum(transactions)
+  ) %>% 
+  pivot_longer(cols = sessions:transactions) %>% 
+  ggplot() + 
+  geom_line(aes(x = date, y = value)) + 
+  facet_wrap(vars(name), nrow = 3, scales = 'free')
+```
+
+I've left the scales free to help with lining up trends. Let's add some smoothing, though. Maybe something like a 1 week rolling average.
+
+```{r}
+session %>% 
+  group_by(date) %>% 
+  summarize(
+    sessions = sum(sessions),
+    qty = sum(QTY),
+    transactions = sum(transactions)
+  ) %>% 
+  pivot_longer(cols = sessions:transactions) %>% 
+  group_by(name) %>% 
+  mutate(value_ma = zoo::rollmean(value, k = 7, fill = NA)) %>% 
+  ggplot() + 
+  geom_line(aes(x = date, y = value), color = grey(0.5)) + 
+  geom_line(aes(x = date, y = value_ma), size = 1, color = "#00ff00") + 
+  facet_wrap(vars(name), nrow = 3, scales = 'free')
+```
+
+These green lines seem to all line up on top of each other, so you can guess that there isn't much independence between quantity, sessions, and transactions, at least not when it comes to volumes. There's some heinous activity in early summer 2013, too. But one year is not enough to base a seasonality claim on. Also, I don't know the product or the consumer. (I'm guessing it's a regular consumer and not a business because of the volume.) 
+
+Before I go further, let me add a long version of the session dataset. 
+
+```{r}
+session_long <- session %>% 
+  pivot_longer(cols = sessions:QTY, names_to = "var", values_to = "n")
+```
+
+
+### Directions for further exploration
+Look at the numbers by different devices and browsers. Create a variable for the ratio of sessions to transactions, etc. (businesses love ratios). I can merge in the `cart` dataset, too, to get whatever `addsToCart` is into the session dataset. 
+
+
+## Browsers
+There are 57 browsers across 3 device categories. What does this look like? 
+
+```{r}
+janitor::tabyl(session, dim_browser, dim_deviceCategory)
+```
+
+
+There is some missing data and many one-offs. It's probably best to look at only the most popular browsers and group the others into an 'other' category. There is still information in the 'other' category that shouldn't be ignored (e.g. device) but this will be uncovered when I look at the other variables. For now, let's see the most common browsers for all devices and individual devices. 
+
+It's a bit messy to get this data into a single table off the top of my head. Probably easiest to just merge on a ranking variable.
+
+```{r}
+janitor::tabyl(session, dim_browser, dim_deviceCategory) %>% 
+  pivot_longer(cols = c(desktop, mobile, tablet)) %>% 
+  arrange(name, desc(value)) %>% 
+  group_by(name) %>% 
+  mutate(rank = row_number(desc(value))) %>% 
+  pivot_wider(id_cols = rank, names_from = name, values_from = dim_browser) %>% 
+  slice_head(n = 5)
+```
+
+Here we have the top five browsers for each device type. Safari appears in all three; Chrome, IE, and Android Webview appear in two; and the leftovers are Opera (desktop), Firefox (mobile), and Amazon Silk (tablet). 
+
+The number one browser for desktops is 'error', which I'm guessing is a failure of the web service to recognize the browser. This should be replaced by `NA` in the original data. "Safari (in-app)" probably means that the site was accessed within an app like Twitter or Instagram, where a temporary browser is brought up when you click on an article, link, or ad. The high showing of this browser indicates to me that a lot of traffic is being driven through apps, probably social media apps. Without knowing more about the apps, I can't guess whether it's fan links, ads, or official sponsorship. But this is an interesting point that should be brought up. Whatever is being sold, people are doing it through apps. 
+
+What's the purchase rate of these in-app visits versus other types of visits? For that, I need some indicators. 
+
+- in-app browser
+- transactions per session
+- quantity per transaction
+
+```{r}
+session <- session %>% 
+  mutate(
+    in_app = grepl("in-app", dim_browser),
+    tps = transactions / sessions,
+    qpt = QTY / transactions
+  )
+
+session
+```
+
+## Transactions per Session
+
+It'll be best to look through these systematically. First, I want to continue looking at the in-app experience. Let's see `tps` and `qpt` for in-app and non-in-app. 
+
+```{r}
+session %>% 
+  group_by(in_app, dim_deviceCategory) %>% 
+  summarize(
+    n = n(),
+    sessions = sum(sessions),
+    transactions = sum(transactions),
+    qty = sum(QTY)
+  ) %>% 
+  mutate(
+    tps = transactions / sessions,
+    qpt = qty / transactions
+  ) %>% 
+  group_by(dim_deviceCategory) %>% 
+  mutate(
+    pct_sessions = round(sessions / sum(sessions), digits = 2),
+    pct_transactions = round(transactions / sum(transactions), digits = 2),
+    pct_qty = round(qty / sum(qty), digits = 2)
+  ) %>% 
+  arrange(dim_deviceCategory)
+```
+
+To summarize, in-app browser experiences cover 9% of mobile sessions and 8% of tablet sessions, but they make up only 4% and 3%, respectively, of actual transactions. Put another way, the transactions per session ratio for in-app browsers is about 1/3 the ratio of non-in-app browsers. At the same time, quantity per transaction is not meaningfully different. 
+
+Moving on, what about total transactions per session and quantity per transaction? 
+
+```{r}
+session %>% 
+  group_by(dim_deviceCategory) %>% 
+  summarize(
+    n = n(),
+    sessions = sum(sessions),
+    transactions = sum(transactions),
+    qty = sum(QTY)
+  ) %>% 
+  mutate(
+    tps = transactions / sessions,
+    qpt = qty / transactions,
+    pct_sessions = round(sessions / sum(sessions), digits = 2),
+    pct_transactions = round(transactions / sum(transactions), digits = 2),
+    pct_qty = round(qty / sum(qty), digits = 2)
+  )
+```
+
+To summarize here, desktops make up 43% of sessions, mobile 35%, and tablets 22%, but desktops compose most of transactions (61%). This is caused by the transaction per session ratio being much lower for mobile users. Across all devices, the quantity per transaction is stable at around 1.8. 
+
+The past two tables have shown that transactions per session are highest on desktop and lowest on mobile. Part (but not all) of this is accounted for by of in-app browsers, which affect both mobile and tablet users and have a very low transaction per session ratio. Quantity per transaction is consistent across all devices and both in-app and normal browsers. 
+
+These two tables will compose the first Excel sheet. The directions say: 
+
+>The first sheet should contain a Month * Device aggregation of the data with the following metrics: Sessions, Transactions, QTY, and ECR (= Transactions / Sessions)
+
+So, I'll have to break this down by month. To this I could add `addsToCart`, but it doesn't quite follow my narrative. I'll include another table breaking down by in-app versus normal browser experiences and performance. 
+
+### Making the Excel Tables
+
+
+## Month over month
+The second part says: 
+
+>The second sheet should contain a Month over Month comparison (for the most recent two months in the data) for all available metrics (including Adds to Cart), showing: the most recent month’s value, the prior month’s value, and both the absolute and relative differences between them.
+
+This one I'm going to play pretty straight. If I have time, I'll look into in-app and normal browsers like I did in the previous step. 
+
+The unit of observation is the month, and only two months are included (May and June 2013, the "most recent two months"). They want me to include "all available metrics," so I'll merge in Adds to Cart. A month's value is maybe well represented by total quantity of purchases for that month. This could hide other metrics like total purchase price, but since I don't have that data, I'll omit it. Relative and absolute differences between the months is clear. 
+
+```{r}
+session_month <- session %>% 
+  mutate(year = year(date), month = month(date)) %>% 
+  group_by(year, month) %>% 
+  summarize(
+    sessions = sum(sessions),
+    transactions = sum(transactions),
+    qty = sum(QTY),
+    .groups = "drop"
+  ) %>% 
+  left_join(cart, by = c("year" = "dim_year", "month" = "dim_month")) %>% 
+  mutate(
+    tps = transactions / sum(transactions),
+    d_sessions = sessions - lag(sessions),
+    d_transactions = transactions - lag(transactions),
+    d_qty = qty - lag(qty),
+    d_atc = addsToCart - lag(addsToCart),
+    rd_sessions = d_sessions / lag(sessions),
+    rd_transactions = d_transactions / lag(transactions),
+    rd_qtr = d_qty / lag(qty),
+    rd_atc = d_atc / lag(addsToCart)
+  )
+
+session_month
+```
+
+This is a lot of data, but we can look at it all very quickly. 
+
+```{r}
+session_month %>% 
+  select(date, everything()) %>% 
+  pivot_longer(cols = sessions:tps) %>% 
+  ggplot() + 
+  geom_col(aes(x = date, y = value)) + 
+  facet_wrap(vars(name), scales = 'free')
+
+
+session_month %>% 
+  select(date, everything()) %>% 
+  pivot_longer(cols = starts_with("d_")) %>% 
+  ggplot() + 
+  geom_col(aes(x = date, y = value)) + 
+  facet_wrap(vars(name), scales = 'free')
+
+session_month %>% 
+  select(date, everything()) %>% 
+  pivot_longer(cols = starts_with("rd_")) %>% 
+  ggplot() + 
+  geom_col(aes(x = date, y = value)) + 
+  facet_wrap(vars(name))
+```
+
+I've split these into non-difference, difference, and relative difference variables. The data covers all months, not just the last two. I think this is important for context, although with seasonality and everything maybe not...
+
+
+TODO: Make Excel sheets
+
+
+
+---
+
+Charlie Gallagher, 2021
