@@ -73,7 +73,7 @@ session %>%
   facet_wrap(vars(name), nrow = 3, scales = 'free')
 ```
 
-These green lines seem to all line up on top of each other, so you can guess that there isn't much independence between quantity, sessions, and transactions, at least not when it comes to volumes. There's some heinous activity in early summer 2013, too. But one year is not enough to base a seasonality claim on. Also, I don't know the product or the consumer. (I'm guessing it's a regular consumer and not a business because of the volume.) 
+These green lines seem to all line up on top of each other, so you can guess that there isn't much independence between quantity, sessions, and transactions, at least not when it comes to volumes. There's some heinous-looking activity in early summer 2013, too. But one year is not enough to base a seasonality claim on. Also, I don't know the product or the consumer. 
 
 Before I go further, let me add a long version of the session dataset. 
 
@@ -252,7 +252,7 @@ session_month %>%
   facet_wrap(vars(name))
 ```
 
-I've split these into non-difference, difference, and relative difference variables. The data covers all months, not just the last two. I think this is important for context, although with seasonality and everything maybe not...
+I've split these into non-difference, difference, and relative difference variables. The data covers all months, not just the last two. 
 
 
 TODO: Make Excel sheets
