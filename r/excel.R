@@ -33,6 +33,31 @@ month_device <- session %>%
   arrange(dim_deviceCategory)
   
   
+# Supplementary data: in-app browsers vs non-in-app browsers
+in_app <- session %>% 
+  mutate(
+    year = year(date), 
+    month = month(date),
+    in_app = grepl("in-app", dim_browser)
+  ) %>% 
+  group_by(in_app, dim_deviceCategory, year, month) %>% 
+  summarize(
+    n = n(),
+    sessions = sum(sessions),
+    transactions = sum(transactions),
+    qty = sum(QTY)
+  ) %>% 
+  mutate(
+    tps = transactions / sessions,
+    qpt = qty / transactions
+  ) %>% 
+  group_by(dim_deviceCategory) %>% 
+  mutate(
+    pct_sessions = round(sessions / sum(sessions), digits = 2),
+    pct_transactions = round(transactions / sum(transactions), digits = 2),
+    pct_qty = round(qty / sum(qty), digits = 2)
+  ) %>% 
+  arrange(dim_deviceCategory)
 
 # Sheet 2: Month aggregation, including `cart` --------
 
@@ -77,10 +102,11 @@ month_diff_last2 <- filter(month_diff,
 # Make Excel --------
 ixis <- list(
   "month_device" = month_device,
-  "month_diff" = month_diff_last2
+  "month_diff" = month_diff_last2,
+  "in_app" = in_app
 )
 
 write.xlsx(ixis, file = "data/ixis_assessment_table.xlsx", asTable = TRUE)
 
 # Save data -----
-save(cart, session, month_device, month_diff, file = "data/ixis.RData")
+save(cart, session, month_device, month_diff, in_app, file = "data/ixis.RData")

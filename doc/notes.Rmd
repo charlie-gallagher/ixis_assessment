@@ -33,10 +33,9 @@ write.xlsx(cart, file = "test.xlsx", asTable = TRUE)
 
 This looks like this: 
 
-![table](.\img\tab1.jpg)
+![table](..\img\tab1.jpg)
 
 This puts it into table format, which is a more useful format than raw data for those using Excel. 
-
 
 The simplest way to write multiple worksheets is to use a list of data frames. The names of the list elements become the names of the sheets. 
 
@@ -46,7 +45,7 @@ l <- list("cart1" = cart, "cart2" = cart)
 write.xlsx(l, file = "test.xlsx", asTable = TRUE)
 ```
 
-![tabs](.\img\tab2.jpg)
+![tabs](..\img\tab2.jpg)
 
 This is naturally convenient. For more precise control, there are the workbook and worksheet objects. 
 
@@ -62,6 +61,4 @@ saveWorkbook(ws, "test.xlsx", overwrite = TRUE)
 ```
 
 In this case, the result is the same. However, you have many, many options for customization. Most of these are irrelevant for this assignment, so I'll stick with the basics. 
-
-
 

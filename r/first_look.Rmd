@@ -1,8 +1,9 @@
 ---
-title: "A First Look"
+title: "First Look"
 author: "Charlie Gallagher"
 output: html_notebook
 ---
+
 
 ```{r, message=FALSE}
 library(tidyverse)
@@ -190,6 +191,38 @@ So, I'll have to break this down by month. To this I could add `addsToCart`, but
 
 ### Making the Excel Tables
 
+I need to add a month grouping variable to the dataframe about in-app browser experiences. 
+
+```{r}
+df <- session %>% 
+  mutate(year = year(date), month = month(date)) %>% 
+  group_by(in_app, dim_deviceCategory, year, month) %>% 
+  summarize(
+    n = n(),
+    sessions = sum(sessions),
+    transactions = sum(transactions),
+    qty = sum(QTY)
+  ) %>% 
+  mutate(
+    tps = transactions / sessions,
+    qpt = qty / transactions
+  ) %>% 
+  group_by(dim_deviceCategory) %>% 
+  mutate(
+    pct_sessions = round(sessions / sum(sessions), digits = 2),
+    pct_transactions = round(transactions / sum(transactions), digits = 2),
+    pct_qty = round(qty / sum(qty), digits = 2)
+  ) %>% 
+  arrange(dim_deviceCategory)
+
+df %>% 
+  mutate(ym = paste0(year, '-', month)) %>% 
+  ggplot() + 
+  geom_line(aes(x = ym, y = tps, group = in_app, color = in_app)) + 
+  facet_wrap(vars(dim_deviceCategory))
+```
+
+
 
 ## Month over month
 The second part says: 
@@ -219,7 +252,7 @@ session_month <- session %>%
     d_atc = addsToCart - lag(addsToCart),
     rd_sessions = d_sessions / lag(sessions),
     rd_transactions = d_transactions / lag(transactions),
-    rd_qtr = d_qty / lag(qty),
+    rd_qty = d_qty / lag(qty),
     rd_atc = d_atc / lag(addsToCart)
   )
 
