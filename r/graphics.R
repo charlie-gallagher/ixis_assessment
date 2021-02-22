@@ -1,6 +1,10 @@
 library(tidyverse)
 library(lubridate)
 
+# Other required packages: 
+#   - glue
+#   - scales
+
 load('data/ixis.RData')
 
 
@@ -17,9 +21,9 @@ month_device <- month_device %>%
                                 levels = c("desktop", "tablet", "mobile"))
   )
 
+
+
 # To present this, a simple line graph
-
-
 # Text dataset
 month_device_text <- month_device %>% 
   group_by(dim_deviceCategory) %>% 
@@ -27,7 +31,8 @@ month_device_text <- month_device %>%
   select(date, dim_deviceCategory, ecr)
 
 p1 <- month_device %>%
-# month_device %>% 
+  
+  # Plot
   ggplot() + 
   geom_line(aes(x = date, y = ecr, 
                 group = dim_deviceCategory, 
@@ -42,6 +47,8 @@ p1 <- month_device %>%
     subtitle = "Transactions per Session, 2012-2013",
     caption = "Charlie Gallagher  |  IXIS Assessment"
   ) + 
+  
+  # Scales and details
   scale_y_continuous(name = "ECR (transactions / session)",
                      limits = c(0, 0.045), 
                      minor_breaks = NULL,
@@ -60,6 +67,8 @@ ggsave('img/month_device.png', plot = p1, height = 7, width = 6)
 
 
 # In-app browser consumer response --------
+
+# Dataset for text
 in_app_text <- tibble(
   dim_deviceCategory = c('desktop', 'mobile', 'mobile', 'tablet', 'tablet'),
   in_app = c(F,F,T,F,T),
@@ -70,10 +79,12 @@ in_app_text <- tibble(
 
 
 p2 <- in_app %>% 
-  filter(tps != 0) %>% 
+  filter(ecr != 0) %>%  # Get rid of zero line in desktop pane
   mutate(date = ymd(glue::glue("{year}-{month}-01"))) %>% 
+  
+  # Plot
   ggplot() + 
-  geom_line(aes(x = date, y = tps, group = in_app, color = in_app),
+  geom_line(aes(x = date, y = ecr, group = in_app, color = in_app),
             size = 1) + 
   geom_text(data = in_app_text, aes(x = x, y = y, label = text,
                                     color = in_app),
@@ -83,6 +94,8 @@ p2 <- in_app %>%
     subtitle = "Transactions per Session for in-app browsers and non-in-app browsers",
     caption = "Charlie Gallagher  |  IXIS Assessment"
   ) + 
+  
+  # Scales and details
   scale_y_continuous(name = "ECR (transactions / session)", 
                      labels = scales::percent_format(accuracy = 1)) +
   scale_color_brewer(type = 'qual', palette = 2, direction = 1) +
@@ -93,7 +106,7 @@ p2 <- in_app %>%
 ggsave('img/in_app.png', height = 6, width = 8)
 
 
-## Relative Differences waterfalls ------
+## Relative Differences waterfall ------
 # Method: generate rectangles with geom_rect()
 # Coordinates are given as *min and *max for x and y
 
@@ -113,6 +126,8 @@ ggsave('img/in_app.png', height = 6, width = 8)
 # Relative differences
 p3 <- month_diff %>% 
   select(date, rd_qty) %>% 
+  
+  # Some data work needs to be done first to make bars
   mutate(
     rd_qty = replace_na(rd_qty, 0),
     cum_rd_qty = cumsum(rd_qty),
@@ -123,17 +138,22 @@ p3 <- month_diff %>%
     ymin = lag(cum_rd_qty, default = 0),
     ymax = cum_rd_qty
   ) %>% 
+  
+  # Plot
   ggplot() + 
   geom_hline(yintercept = 0) + 
   geom_rect(aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax,
                 fill = interaction(is_pos, is_last2))) + 
+  
+  # Add step line for clarity
   geom_step(aes(x = date - weeks(2), y = cum_rd_qty), color = 'black') + 
-  # geom_point(aes(x = date, y = cum_rd_qty), color = 'red') + 
   labs(
     title = "Change in Quantity Sold",
     subtitle = "% change since July, 2012",
     caption = "Charlie Gallagher  |  IXIS Assessment"
   ) + 
+   
+  # Scales and details
   scale_fill_manual(values = c('#ff4f4d70', '#32a85270', '#ff4f4d', '#32a852')) + 
   scale_y_continuous(name = "% Change in Quantity Sold", 
                      labels = scales::percent_format()) + 

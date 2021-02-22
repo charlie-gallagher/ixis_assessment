@@ -3,8 +3,8 @@ library(janitor)
 library(lubridate)
 library(openxlsx)
 
-# TODO: Make data dictionary (append to README)
-# TODO: Add dataset for in-app browser data
+# Other required package: 
+#   - glue
 
 # Get data ---------
 cart <- read_csv("data/DataAnalyst_Ecom_data_addsToCart.csv")
@@ -21,6 +21,7 @@ cart <- mutate(cart, date = ymd(glue::glue("{dim_year}-{dim_month}-01")))
 # with the following metrics: Sessions, Transactions, QTY, and ECR 
 # (= Transactions / Sessions)."
 
+# Aggregate sums by year/month
 month_device <- session %>% 
   mutate(month = month(date), year = year(date)) %>% 
   group_by(year, month, dim_deviceCategory) %>% 
@@ -29,7 +30,7 @@ month_device <- session %>%
     transactions = sum(transactions),
     qty = sum(QTY)
   ) %>% 
-  mutate(ecr = transactions / sessions) %>% # ECR: Efficient Consumer Response
+  mutate(ecr = transactions / sessions) %>% # ECR: "Efficient Consumer Response"
   arrange(dim_deviceCategory)
   
   
@@ -38,7 +39,7 @@ in_app <- session %>%
   mutate(
     year = year(date), 
     month = month(date),
-    in_app = grepl("in-app", dim_browser)
+    in_app = grepl("in-app", dim_browser)  # Browser contains "in-app"
   ) %>% 
   group_by(in_app, dim_deviceCategory, year, month) %>% 
   summarize(
@@ -47,16 +48,7 @@ in_app <- session %>%
     transactions = sum(transactions),
     qty = sum(QTY)
   ) %>% 
-  mutate(
-    tps = transactions / sessions,
-    qpt = qty / transactions
-  ) %>% 
-  group_by(dim_deviceCategory) %>% 
-  mutate(
-    pct_sessions = round(sessions / sum(sessions), digits = 2),
-    pct_transactions = round(transactions / sum(transactions), digits = 2),
-    pct_qty = round(qty / sum(qty), digits = 2)
-  ) %>% 
+  mutate(ecr = transactions / sessions) %>% 
   arrange(dim_deviceCategory)
 
 # Sheet 2: Month aggregation, including `cart` --------
@@ -66,8 +58,9 @@ in_app <- session %>%
 # Cart), showing: the most recent month’s value, the prior month’s value, and 
 # both the absolute and relative differences between them."
 
+# Contains absolute and relative differences
 month_diff <- session %>% 
-  mutate(year = year(date), month = month(date)) %>% 
+  mutate(year = year(date), month = month(date)) %>% # Pull out year and month
   group_by(year, month) %>% 
   summarize(
     sessions = sum(sessions),
@@ -75,13 +68,20 @@ month_diff <- session %>%
     qty = sum(QTY),
     .groups = "drop"
   ) %>% 
+  # Left-join cart data (left, right, and full joins would work)
   left_join(cart, by = c("year" = "dim_year", "month" = "dim_month")) %>% 
   mutate(
-    tps = transactions / sum(transactions),
+    ecr = transactions / sum(transactions),
+    
+    # Absolute differences
+    d_ecr = ecr - lag(ecr),
     d_sessions = sessions - lag(sessions),
     d_transactions = transactions - lag(transactions),
     d_qty = qty - lag(qty),
     d_atc = addsToCart - lag(addsToCart),
+    
+    # Relative differences
+    rd_ecr = d_ecr / lag(ecr),
     rd_sessions = d_sessions / lag(sessions),
     rd_transactions = d_transactions / lag(transactions),
     rd_qty = d_qty / lag(qty),
@@ -89,7 +89,7 @@ month_diff <- session %>%
   ) %>% 
   # Arrange columns
   select(
-    date, year, month, contains("sessions"), contains("transactions"),
+    date, year, month, contains('ecr'), contains("sessions"), contains("transactions"),
     contains("qty"), contains("atc")
   )
 
